@@ -159,6 +159,5 @@ class LayerNorm1d(Module):
         batch, dim = x.shape
         ### BEGIN YOUR SOLUTION
         normalized = (x - x.mean(dim = 1)) / ((x.var(dim = 1) + self.eps) ** 0.5)
-        print(f"norml sahpe {normalized.shape} weights shape {self.weights.value.shape}")
         return normalized * self.weights.value + self.bias.value
         ### END YOUR SOLUTION

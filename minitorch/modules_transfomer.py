@@ -45,12 +45,11 @@ class MultiHeadAttention(Module):
         self.attn_hidden_dim = n_embd // n_head
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
-        # self.q_projection = 
-        # self.k_projection = 
-        # self.v_projection = 
-        # self.out_projection = 
-        # self.dropout = 
+        self.q_projection = Linear(n_embd, n_embd, bias, backend = self.backend)
+        self.k_projection = Linear(n_embd, n_embd, bias, backend = self.backend)
+        self.v_projection = Linear(n_embd, n_embd, bias, backend = self.backend)
+        self.out_projection = Linear(n_embd, n_embd, bias, backend = self.backend)
+        self.dropout = Dropout(p_dropout)
         ### END YOUR SOLUTION
 
     def create_causal_mask(self, seq_len):
@@ -71,7 +70,18 @@ class MultiHeadAttention(Module):
         """
         batch_size, seq_len, n_embd = x.shape
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        x = x.view(batch_size * seq_len, n_embd)
+        q = self.q_projection(x)
+        q = q.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim)
+        q = q.permute(0, 2, 1, 3)
+        k = self.k_projection(x)
+        k = k.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim)
+        k = k.permute(0, 2, 1, 3)
+        v = self.v_projection(x)
+        v = v.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim)
+        v = v.permute(0, 2, 1, 3)
+        # transpose k
+        kT = k.permute(0, 1, 3, 2)
         ### END YOUR SOLUTION
         return q, kT, v
     
@@ -97,9 +107,13 @@ class MultiHeadAttention(Module):
         result = None
         
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        numerator = q @ kT / np.sqrt(self.attn_hidden_dim)
+        if self.causal:
+            numerator += self.create_causal_mask(queries_len)
+        result = softmax(numerator, dim = 3) @ v
+        result = result.permute(0,2,1,3)
+        result = result.contiguous().view(batch_size, queries_len, self.n_embd)
         ### END YOUR SOLUTION
-
         return result
 
     def forward(self, x):
@@ -113,7 +127,13 @@ class MultiHeadAttention(Module):
         """
         batch_size, seq_len, n_embd = x.shape
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        q, kT, v = self.project_to_query_key_value(x)
+        output = self.self_attention(q, kT, v)
+        output = output.view(batch_size * seq_len, self.n_embd)
+        output = self.out_projection(output)
+        output = output.view(batch_size, seq_len, self.n_embd)
+        output = self.dropout(output)
+        return output
         ### END YOUR SOLUTION
 
 
@@ -133,7 +153,7 @@ class FeedForward(Module):
             linear_out : second linear layer
             dropout    : dropout layer
         """
-        ### BEGIN YOUR SOLUTION 
+        ### BEGIN YOUR SOLUTION
         self.linear_in  = Linear(n_embd, middle_dim, bias=bias, backend=backend)
         self.linear_out = Linear(middle_dim, n_embd, bias=bias, backend=backend)
         self.dropout    = Dropout(p_dropout)
@@ -177,11 +197,10 @@ class TransformerLayer(Module):
             ff : FeedForward layer
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
-        # self.ln_1
-        # self.ln_2
-        # self.attention
-        # self.ff
+        self.ln_1 = LayerNorm1d(n_embd, ln_eps, backend = backend)
+        self.ln_2 = LayerNorm1d(n_embd, ln_eps, backend = backend)
+        self.attention = MultiHeadAttention(n_embd, n_head, True, p_dropout, bias, backend = backend)
+        self.ff = FeedForward(n_embd, 256, p_dropout, bias, backend = backend)
         ### END YOUR SOLUTION
 
     def forward(self, x):
@@ -195,7 +214,12 @@ class TransformerLayer(Module):
         """
         batch_size, seq_len, n_embd = x.shape
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        norm1_x = self.ln_1(x.view(batch_size * seq_len, n_embd))
+        x = x + self.attention(norm1_x.view(batch_size, seq_len, n_embd))
+        norm2_x = self.ln_2(x.view(batch_size * seq_len, n_embd))
+        ffx = self.ff(norm2_x.view(batch_size, seq_len, n_embd))
+        x = x + ffx
+        return x
         ### END YOUR SOLUTION
 
 
@@ -238,16 +262,15 @@ class DecoderLM(Module):
         self.n_embd              = n_embd
         self.n_vocab             = n_vocab
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
-        # self.token_embeddings    = 
-        # self.position_embeddings = 
-        # self.t_layer_1           = 
-        # self.t_layer_2           = 
-        # self.t_layer_3           = 
-        # self.t_layer_4           = 
-        # self.dropout             = 
-        # self.ln                  = 
-        # self.lm_head             = 
+        self.token_embeddings    = Embedding(n_vocab, n_embd, backend = backend)
+        self.position_embeddings = Embedding(n_positions, n_embd, backend = backend)
+        self.t_layer_1           = TransformerLayer(n_embd, n_head, p_dropout, ln_eps, bias, backend = backend)
+        self.t_layer_2           = TransformerLayer(n_embd, n_head, p_dropout, ln_eps, bias, backend = backend)
+        self.t_layer_3           = TransformerLayer(n_embd, n_head, p_dropout, ln_eps, bias, backend = backend)
+        self.t_layer_4           = TransformerLayer(n_embd, n_head, p_dropout, ln_eps, bias, backend = backend)
+        self.dropout             = Dropout(p_dropout)
+        self.ln                  = LayerNorm1d(n_embd, ln_eps, backend = backend)
+        self.lm_head             = Linear(n_embd, n_vocab, bias, backend = backend)
         ### END YOUR SOLUTION
     
     def forward(self, idx):
@@ -262,15 +285,27 @@ class DecoderLM(Module):
         batch_size, seq_len = idx.shape
 
         ### BEGIN SOLUTION
-        raise NotImplementedError
         # Get Token Embeddings of shape (batch_size, seq_len, n_embd)
+        token_embeddings = self.token_embeddings(idx)
         """
         Create Positional Embeddings of shape (1, seq_len, n_embd)
          - First create a tensor of position ids [0, 1, 2, ..., seq_len - 1] of shape (1, seq_len)
          - Pass the position ids through your positional embedding layer
          - Ensure shape is (1, seq_len, n_embd)
         """
+        position_ids = tensor_from_numpy(np.arange(seq_len).reshape((1, seq_len)), backend = self.backend)
+        position_embeddings = self.position_embeddings(position_ids)
+        output = self.dropout(token_embeddings + position_embeddings)
         # Pass through each transformer Layer
+        output = self.t_layer_1(output)
+        output = self.t_layer_2(output)
+        output = self.t_layer_3(output)
+        output = self.t_layer_4(output)
         # Final LayerNorm
+        output = output.view(batch_size * seq_len, self.n_embd)
+        output = self.ln(output)
+        output = self.lm_head(output)
         # Get correct shape
+        output = output.view(batch_size, seq_len, self.n_vocab)
+        return output
         ### END SOLUTION

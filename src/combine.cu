@@ -215,7 +215,6 @@ __global__ void MatrixMultiplyKernel(
     for (int i = 0; i < ceil(width/(float)TILE); i++) {
       // load in a
       int a_pos = batch*a_batch_stride + out_row*width + TILE*i + ty;
-      to_index(a_pos, a_shape, in_index, 3);
       if (out_row < m && TILE*i + ty < n) {
         a_shared[threadIdx.x][threadIdx.y] = a_storage[a_pos];
       }
@@ -224,7 +223,6 @@ __global__ void MatrixMultiplyKernel(
       }
       //load in b
       int b_pos = batch*b_batch_stride + (i*TILE + tx)*b_strides[1] + out_col;
-      to_index(b_pos, b_shape, in_index, 3);
       if (TILE*i + tx < n && out_col < p) {
         b_shared[threadIdx.x][threadIdx.y] = b_storage[b_pos];
       }

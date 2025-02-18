@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, List, Tuple
 
 from typing_extensions import Protocol
+from collections import defaultdict
 
 
 def central_difference(f: Any, *vals: Any, arg: int = 0, epsilon: float = 1e-6) -> Any:
@@ -129,13 +130,18 @@ def backpropagate(variable: Variable, deriv: Any) -> None:
     No return. Should write to its results to the derivative values of each leaf through `accumulate_derivative`.
     """
     # BEGIN ASSIGN1_1
-    if variable.is_constant():
-      return
-    if variable.is_leaf():
-      variable.accumulate_derivative(deriv)
-    else:
-      for parent, gradient in variable.chain_rule(deriv):
-        backpropagate(parent, gradient)
+    nodes = list(topological_sort(variable)) # should be in topological order
+    gradients = dict()
+    gradients[variable.unique_id] = deriv
+    for node in nodes:
+        if node.is_constant():
+            continue
+        curr = gradients[node.unique_id]
+        if node.is_leaf():
+            node.accumulate_derivative(curr)
+        else:
+            for parent, grad in node.chain_rule(curr):
+                gradients[parent.unique_id] = grad + gradients.setdefault(parent.unique_id, 0.0)
     # END ASSIGN1_1
 
 
