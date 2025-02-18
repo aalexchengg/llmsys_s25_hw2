@@ -300,9 +300,10 @@ def generate(model,
             # run the model with current token_ids, and predict the next token (gen_id)
             # hint: obtain the logits of next token, and take the argmax.
             gen_id = 0
-            raise NotImplementedError("Generation Function Not Implemented Yet")
+            logits = model(minitorch.tensor_from_numpy(np.array(token_ids).reshape((1, -1)), backend = model.backend))
+            np_logits = logits.to_numpy() # shape of (batch size x seq len x n vocab)
+            gen_id = np.argmax(np_logits[-1][-1])
             # END ASSIGN2_2
-
             if gen_id == tokenizer.vocab[f'<eos_{tgt_key}>']:
                 break
             else:
@@ -334,7 +335,7 @@ def evaluate_bleu(examples, gen_sents, tgt_key):
 
 def main(dataset_name='bbaaaa/iwslt14-de-en-preprocess',
          model_max_length=40,
-         n_epochs=20,
+         n_epochs=10,
          batch_size=128,
          learning_rate=0.02,
          samples_per_epoch=20000,
