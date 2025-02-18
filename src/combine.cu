@@ -200,7 +200,6 @@ __global__ void MatrixMultiplyKernel(
     // 5. Compute the output tile for this thread block
     // 6. Synchronize to make sure all threads are done computing the output tile for (row, col)
     // 7. Write the output to global memory
-    int in_index[3];
 
     int tx = threadIdx.x; // gives us row
     int ty = threadIdx.y;  // gives us col
@@ -214,16 +213,16 @@ __global__ void MatrixMultiplyKernel(
     int height = b_shape[2]; // p
     for (int i = 0; i < ceil(width/(float)TILE); i++) {
       // load in a
-      int a_pos = batch*a_batch_stride + out_row*width + TILE*i + ty;
-      if (out_row < m && TILE*i + ty < n) {
+      int a_pos = batch*a_batch_stride + (out_row*a_strides[1]) + (TILE*i + ty)*a_strides[2];
+      if (out_row < a_shape[1] && TILE*i + ty < width) {
         a_shared[threadIdx.x][threadIdx.y] = a_storage[a_pos];
       }
       else {
         a_shared[threadIdx.x][threadIdx.y] = 0;
       }
       //load in b
-      int b_pos = batch*b_batch_stride + (i*TILE + tx)*b_strides[1] + out_col;
-      if (TILE*i + tx < n && out_col < p) {
+      int b_pos = batch*b_batch_stride + (i*TILE + tx)*b_strides[1] + out_col*b_strides[2];
+      if (TILE*i + tx < width && out_col < height) {
         b_shared[threadIdx.x][threadIdx.y] = b_storage[b_pos];
       }
       else {
@@ -235,7 +234,7 @@ __global__ void MatrixMultiplyKernel(
       }
       __syncthreads();
     }
-    if (batch < out_shape[0] && out_row < out_shape[1] && out_col < out_shape[2]) {
+    if (out_row < out_shape[1] && out_col < out_shape[2]) {
       out[out_pos] = pvalue;
     }
     /// END ASSIGN1_2
