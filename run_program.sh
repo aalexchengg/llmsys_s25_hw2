@@ -3,7 +3,7 @@
 #SBATCH --output=out/problem4.out
 #SBATCH --error=out/problem4.err
 #SBATCH --partition=general
-#SBATCH --time=11:00:00
+#SBATCH --time=1-12:00:00
 #SBATCH --mem=32G
 #SBATCH --gpus=1
 
